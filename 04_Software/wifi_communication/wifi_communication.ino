@@ -1,6 +1,14 @@
 #include <SPI.h>
 #include <WiFiNINA.h>
 
+typedef struct sensorData
+{
+  int humidity=1;
+  int temperature=2;
+  bool flame_detection=true;
+  bool open_door=false;
+}sensorData;
+
 WiFiServer server(80);
 
 #include "secret.h"
@@ -10,8 +18,16 @@ char pass[] = SECRET_PASS;                        // your network password (use 
 
 int wifi_status = WL_IDLE_STATUS;                 // the Wi-Fi radio's status
 unsigned long previousMillisWifi = 0;             // will store last time Wi-Fi information was updated
+const int intervalWifiInfo = 10000;               // will store last time Wi-Fi information was updated
 const int intervalWifiInfo = 10000;               // interval at which to update the board information
+unsigned long previousMillisSensors = 0;          // will store last time sensor information was updated
+const int intervalSensors = 5000;                 // interval at which to update the sensor information
+int cnt_sensorData = 0;
+sensorData data_latest;                           // will store latest set of sensor data
+const int ELEMENT_CNT_MAX = 20; 
+sensorData data_saved[ELEMENT_CNT_MAX];               // interval at which to update the board information
 
+void getSensorData();
 void httpCommunication(WiFiClient client);
 String sendHTML();
 void wifiStartup();
@@ -44,10 +60,33 @@ void loop() {
     previousMillisWifi = millis();
   }
 
+  // get data once every 5 seconds:
+  if (millis() - previousMillisSensors > intervalSensors) {
+    previousMillisSensors = millis();
+    getSensorData();
+    if (cnt_sensorData >= ELEMENT_CNT_MAX) {
+      // first in first out storage:
+      for (int i=0; i < ELEMENT_CNT_MAX - 1; i++){
+        data_saved[i]=data_saved[i+1];
+      }
+      data_saved[ELEMENT_CNT_MAX - 1] = data_latest;
+    }else {
+      data_saved[cnt_sensorData]=data_latest;
+      cnt_sensorData += 1;
+    }
+  }
+
   WiFiClient client = server.available();
   if (client) {
     httpCommunication(client);
   }
+}
+
+void getSensorData() {
+  data_latest.flame_detection=!data_latest.flame_detection;
+  data_latest.open_door=data_latest.open_door;
+  data_latest.humidity=data_latest.humidity+1;
+  data_latest.temperature=data_latest.temperature+1;
 }
 
 void httpCommunication(WiFiClient client) {
@@ -92,9 +131,36 @@ String sendHTML() {
   String content = "<!DOCTYPE HTML> <html>\n";
   content += "<head> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
   content += "<title>Sensordata</title>\n</head>\n";
-  content += "<body>\n <div id=\"test\">\n";
-  content += "<p>Test</p>\n";
-  content += "</div>\n</body>\n </html>\n";
+  content += "<body>\n <div id=\"latest_data\">\n";
+  content += "<p>humidity: ";
+  content += String(data_latest.humidity);
+  content += "</p>\n<p>temperature: ";
+  content += String(data_latest.temperature);
+  content += "</p>\n<p>flame detection: ";
+  content += String(data_latest.flame_detection);
+  content += "</p>\n<p>door open: ";
+  content += String(data_latest.open_door);
+  content += "</p>\n</div>\n";
+  content += "<div id=\"all_data\">\n";
+  content += "<table>\n<tr>\n";
+  content += "<th>humidity</th>\n";
+  content += "<th>temperature</th>\n";
+  content += "<th>flame detection</th>\n";
+  content += "<th>door open</th>\n";
+  content += "<th>time</th>\n";
+  content += "<th>date</th>\n</tr>\n";
+  for (int i = 0; i < cnt_sensorData; i++) {
+    content += "<tr>\n<th>";
+    content += String(data_saved[i].humidity);
+    content += "</th>\n<th>";
+    content += String(data_saved[i].temperature);
+    content += "</th>\n<th>";
+    content += String(data_saved[i].flame_detection);
+    content += "</th>\n<th>";
+    content += String(data_saved[i].open_door);
+    content += "</th>\n</tr>\n";
+  }
+  content +="</div>\n </body>\n </html>\n";
   return content;
 }
 

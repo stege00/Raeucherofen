@@ -1,5 +1,8 @@
+#include <TimeLib.h>
 #include <SPI.h>
 #include <WiFiNINA.h>
+
+#define UTC_OFFSET (3600)
 
 typedef struct sensorData
 {
@@ -7,9 +10,11 @@ typedef struct sensorData
   int temperature=2;
   bool flame_detection=true;
   bool open_door=false;
+  char date_formatted[11];
+  char time_formatted[9];
 }sensorData;
 
-WiFiServer server(80);
+WiFiServer server(80);    
 
 #include "secret.h"
 //please enter your sensitive data in the Secret tab
@@ -18,16 +23,16 @@ char pass[] = SECRET_PASS;                        // your network password (use 
 
 int wifi_status = WL_IDLE_STATUS;                 // the Wi-Fi radio's status
 unsigned long previousMillisWifi = 0;             // will store last time Wi-Fi information was updated
-const int intervalWifiInfo = 10000;               // will store last time Wi-Fi information was updated
 const int intervalWifiInfo = 10000;               // interval at which to update the board information
 unsigned long previousMillisSensors = 0;          // will store last time sensor information was updated
 const int intervalSensors = 5000;                 // interval at which to update the sensor information
 int cnt_sensorData = 0;
 sensorData data_latest;                           // will store latest set of sensor data
 const int ELEMENT_CNT_MAX = 20; 
-sensorData data_saved[ELEMENT_CNT_MAX];               // interval at which to update the board information
+sensorData data_saved[ELEMENT_CNT_MAX];           // will store latest x sets of data
 
 void getSensorData();
+void getDateTime();
 void httpCommunication(WiFiClient client);
 String sendHTML();
 void wifiStartup();
@@ -52,7 +57,7 @@ void setup() {
 }
 
 void loop() {
-
+  
   // check the network connection once every 10 seconds:
   if ((millis() - previousMillisWifi > intervalWifiInfo) && (wifi_status != WL_CONNECTED)) {
     wifiConnect();
@@ -63,6 +68,7 @@ void loop() {
   // get data once every 5 seconds:
   if (millis() - previousMillisSensors > intervalSensors) {
     previousMillisSensors = millis();
+    getDateTime();
     getSensorData();
     if (cnt_sensorData >= ELEMENT_CNT_MAX) {
       // first in first out storage:
@@ -80,6 +86,7 @@ void loop() {
   if (client) {
     httpCommunication(client);
   }
+    
 }
 
 void getSensorData() {
@@ -87,6 +94,19 @@ void getSensorData() {
   data_latest.open_door=data_latest.open_door;
   data_latest.humidity=data_latest.humidity+1;
   data_latest.temperature=data_latest.temperature+1;
+}
+
+void getDateTime() {
+  unsigned long epochTime = WiFi.getTime() + UTC_OFFSET;               // time since 1.1.1970 in sec.
+  int currentYear = year(epochTime);
+  int currentMonth = month(epochTime);
+  int monthDay = day(epochTime);
+  int currentHour = hour(epochTime);
+  int currentMinute = minute(epochTime);
+  int currentSecond = second(epochTime);
+  
+  (String(monthDay)+":"+String(currentMonth)+":"+String(currentYear)).toCharArray(data_latest.date_formatted, 11);
+  (String(currentHour)+":"+String(currentMinute)+":"+String(currentSecond)).toCharArray(data_latest.time_formatted, 9); 
 }
 
 void httpCommunication(WiFiClient client) {
@@ -140,7 +160,10 @@ String sendHTML() {
   content += String(data_latest.flame_detection);
   content += "</p>\n<p>door open: ";
   content += String(data_latest.open_door);
-  content += "</p>\n</div>\n";
+  content += "</p>\n<p>time + date: ";
+  content += String(data_latest.time_formatted) + String(data_latest.date_formatted);
+  content += "</p>\n";
+  content += "</div>\n";
   content += "<div id=\"all_data\">\n";
   content += "<table>\n<tr>\n";
   content += "<th>humidity</th>\n";
@@ -158,6 +181,10 @@ String sendHTML() {
     content += String(data_saved[i].flame_detection);
     content += "</th>\n<th>";
     content += String(data_saved[i].open_door);
+    content += "</th>\n<th>";
+    content += data_saved[i].time_formatted;
+    content += "</th>\n<th>";
+    content += data_saved[i].date_formatted;
     content += "</th>\n</tr>\n";
   }
   content +="</div>\n </body>\n </html>\n";

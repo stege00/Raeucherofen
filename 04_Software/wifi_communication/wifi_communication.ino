@@ -1,6 +1,8 @@
 #include <SPI.h>
 #include <WiFiNINA.h>
 
+WiFiServer server(80);
+
 #include "secret.h"
 //please enter your sensitive data in the Secret tab
 char ssid[] = SECRET_SSID;                        // your network SSID (name)
@@ -10,6 +12,8 @@ int wifi_status = WL_IDLE_STATUS;                 // the Wi-Fi radio's status
 unsigned long previousMillisWifi = 0;             // will store last time Wi-Fi information was updated
 const int intervalWifiInfo = 10000;               // interval at which to update the board information
 
+void httpCommunication(WiFiClient client);
+String sendHTML();
 void wifiStartup();
 void wifiConnect();
 void printWifiData();
@@ -28,16 +32,70 @@ void setup() {
   
   printCurrentNet();
   printWifiData();
-
+  server.begin();
 }
 
 void loop() {
+
   // check the network connection once every 10 seconds:
   if ((millis() - previousMillisWifi > intervalWifiInfo) && (wifi_status != WL_CONNECTED)) {
     wifiConnect();
     printCurrentNet();
     previousMillisWifi = millis();
   }
+
+  WiFiClient client = server.available();
+  if (client) {
+    httpCommunication(client);
+  }
+}
+
+void httpCommunication(WiFiClient client) {
+  Serial.println("new client");
+  // an http request ends with a blank line
+  boolean currentLineIsBlank = true;
+  while (client.connected()) {
+    if (client.available()) {
+      char c = client.read();
+      Serial.write(c);
+      // if you've gotten to the end of the line (received a newline
+      // character) and the line is blank, the http request has ended,
+      // so you can send a reply
+      if (c == '\n' && currentLineIsBlank) {
+        // send a standard http response header
+        client.println("HTTP/1.1 200 OK");
+        client.println("Content-Type: text/html");
+        client.println("Connection: close");    // the connection will be closed after completion of the response
+        client.println("Refresh: 10");          // refresh the page automatically every x sec
+        client.println();
+        client.print(sendHTML());
+        break;
+      }
+      if (c == '\n') {
+        // you're starting a new line
+        currentLineIsBlank = true;
+      } else if (c != '\r') {
+        // you've gotten a character on the current line
+        currentLineIsBlank = false;
+      }
+    }
+  }
+  // give the web browser time to receive the data
+  delay(1);
+
+  // close the connection:
+  client.stop();
+  Serial.println("client disconnected");
+}
+
+String sendHTML() {
+  String content = "<!DOCTYPE HTML> <html>\n";
+  content += "<head> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
+  content += "<title>Sensordata</title>\n</head>\n";
+  content += "<body>\n <div id=\"test\">\n";
+  content += "<p>Test</p>\n";
+  content += "</div>\n</body>\n </html>\n";
+  return content;
 }
 
 void wifiStartup() {

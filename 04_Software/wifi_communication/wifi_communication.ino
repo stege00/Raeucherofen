@@ -22,10 +22,14 @@ char ssid[] = SECRET_SSID;                        // your network SSID (name)
 char pass[] = SECRET_PASS;                        // your network password (use for WPA, or use as key for WEP)
 
 int wifi_status = WL_IDLE_STATUS;                 // the Wi-Fi radio's status
-unsigned long previousMillisWifi = 0;             // will store last time Wi-Fi information was updated
-const int intervalWifiInfo = 10000;               // interval at which to update the board information
+
 unsigned long previousMillisSensors = 0;          // will store last time sensor information was updated
+unsigned long previousMillisWifi = 0;             // will store last time Wi-Fi information was updated
+unsigned long previousMillisServer = 0;           //   "    "     "    "  Server      "      "     "
 const int intervalSensors = 5000;                 // interval at which to update the sensor information
+const int intervalWifiInfo = 10000;               // interval at which to update the Wi-Fi information
+const int intervalServerInfo = 10000;             //   "       "   "    "   "     "  Server     "
+
 int cnt_sensorData = 0;
 sensorData data_latest;                           // will store latest set of sensor data
 const int ELEMENT_CNT_MAX = 20; 
@@ -44,25 +48,37 @@ void printMacAddress(byte mac[]);
 void setup() {
   // serial startup
   Serial.begin(9600);
-  /*while(!Serial){
+  while(!Serial){
     ;
-  }*/
+  }
 
   wifiStartup();
   wifiConnect();
   
   printCurrentNet();
   printWifiData();
+  Serial.println(server.status());
   server.begin();
+  Serial.println(server.status());
 }
 
 void loop() {
   
   // check the network connection once every 10 seconds:
-  if ((millis() - previousMillisWifi > intervalWifiInfo) && (wifi_status != WL_CONNECTED)) {
-    wifiConnect();
+  if (millis() - previousMillisWifi > intervalWifiInfo) {
+    if (wifi_status != WL_CONNECTED)
+      wifiConnect();
     printCurrentNet();
     previousMillisWifi = millis();
+  }
+
+  // check the webserver status once every 10 seconds:    
+  if (millis() - previousMillisServer > intervalServerInfo) {
+    if (server.status() != 1)
+      server.begin();
+    Serial.print("Server Status: ");
+    Serial.println(server.status());
+    previousMillisServer = millis();
   }
 
   // get data once every 5 seconds:
@@ -105,7 +121,7 @@ void getDateTime() {
   int currentMinute = minute(epochTime);
   int currentSecond = second(epochTime);
   
-  (String(monthDay)+":"+String(currentMonth)+":"+String(currentYear)).toCharArray(data_latest.date_formatted, 11);
+  (String(monthDay)+"."+String(currentMonth)+"."+String(currentYear)).toCharArray(data_latest.date_formatted, 11);
   (String(currentHour)+":"+String(currentMinute)+":"+String(currentSecond)).toCharArray(data_latest.time_formatted, 9); 
 }
 
@@ -117,9 +133,9 @@ void httpCommunication(WiFiClient client) {
     if (client.available()) {
       char c = client.read();
       Serial.write(c);
-      // if you've gotten to the end of the line (received a newline
-      // character) and the line is blank, the http request has ended,
-      // so you can send a reply
+      // the http request has ended, if it is the end of
+      // the line (we received a newline character) and the
+      // line is blank, so we can send a reply
       if (c == '\n' && currentLineIsBlank) {
         // send a standard http response header
         client.println("HTTP/1.1 200 OK");
@@ -161,7 +177,7 @@ String sendHTML() {
   content += "</p>\n<p>door open: ";
   content += String(data_latest.open_door);
   content += "</p>\n<p>time + date: ";
-  content += String(data_latest.time_formatted) + String(data_latest.date_formatted);
+  content += String(data_latest.time_formatted) + " " + String(data_latest.date_formatted);
   content += "</p>\n";
   content += "</div>\n";
   content += "<div id=\"all_data\">\n";
@@ -173,19 +189,19 @@ String sendHTML() {
   content += "<th>time</th>\n";
   content += "<th>date</th>\n</tr>\n";
   for (int i = 0; i < cnt_sensorData; i++) {
-    content += "<tr>\n<th>";
+    content += "<tr>\n<td>";
     content += String(data_saved[i].humidity);
-    content += "</th>\n<th>";
+    content += "</td>\n<td>";
     content += String(data_saved[i].temperature);
-    content += "</th>\n<th>";
+    content += "</td>\n<td>";
     content += String(data_saved[i].flame_detection);
-    content += "</th>\n<th>";
+    content += "</td>\n<td>";
     content += String(data_saved[i].open_door);
-    content += "</th>\n<th>";
+    content += "</td>\n<td>";
     content += data_saved[i].time_formatted;
-    content += "</th>\n<th>";
+    content += "</td>\n<td>";
     content += data_saved[i].date_formatted;
-    content += "</th>\n</tr>\n";
+    content += "</td>\n</tr>\n";
   }
   content +="</div>\n </body>\n </html>\n";
   return content;

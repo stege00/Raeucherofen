@@ -66,9 +66,13 @@ void loop() {
   
   // check the network connection once every 10 seconds:
   if (millis() - previousMillisWifi > intervalWifiInfo) {
-    if (wifi_status != WL_CONNECTED)
+    wifi_status = WiFi.status();
+    Serial.print("wifistatus: ");
+    Serial.println(wifi_status);
+    if (wifi_status != WL_CONNECTED) {
       wifiConnect();
-    printCurrentNet();
+      printCurrentNet();
+    }
     previousMillisWifi = millis();
   }
 
@@ -141,7 +145,7 @@ void httpCommunication(WiFiClient client) {
         client.println("HTTP/1.1 200 OK");
         client.println("Content-Type: text/html");
         client.println("Connection: close");    // the connection will be closed after completion of the response
-        client.println("Refresh: 10");          // refresh the page automatically every x sec
+        //client.println("Refresh: 10");          // refresh the page automatically every 10 sec
         client.println();
         client.print(sendHTML());
         break;
@@ -166,8 +170,10 @@ void httpCommunication(WiFiClient client) {
 String sendHTML() {
   String content = "<!DOCTYPE HTML> <html>\n";
   content += "<head> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
+  content += "<style> table, th, td { border:1px solid black; border-collapse: collapse;} </style>\n";
   content += "<title>Sensordata</title>\n</head>\n";
   content += "<body>\n <div id=\"latest_data\">\n";
+  content += "<h2>Latest Sensordata</h2> ";
   content += "<p>humidity: ";
   content += String(data_latest.humidity);
   content += "</p>\n<p>temperature: ";

@@ -1,0 +1,20 @@
+@startuml Downloader
+:Main Activity|
+
+partition Downloader {
+    
+    ->URL; 
+    :Start new asynchronous Task;
+    :Download Webpage;
+    note left
+        Connect to Webserver as
+        HTTP Client, getting the
+        Input Stream from Host
+        (HTML Sourcecode)
+    end note
+    :Download-Complete-Listener;
+    ->Result from asynchronous Task;
+}
+:Main Activity|
+
+@enduml

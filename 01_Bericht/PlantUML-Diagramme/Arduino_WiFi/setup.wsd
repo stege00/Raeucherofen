@@ -1,0 +1,20 @@
+@startuml
+start
+-> startup;
+partition setup {
+    :Begin Serial Communication;
+    -> Check WiFi Module of µC;
+    if (WiFi Module?) is (availible) then
+        :Connect to WiFi;
+        while (Connection?) is (not successful)
+            :wait 10 sec.;
+        endwhile (successful)
+            :Print WiFi Data;
+    else
+        -> stop program;
+        stop
+    endif  
+    :Start Webserver;      
+}
+:loop|
+@enduml

@@ -1,0 +1,29 @@
+@startuml
+:setup|
+partition loop {
+    repeat 
+        :Get new Data:
+        Sensordata, Date, Time;
+        note left 
+            Save data in 
+            first-in-first-
+            out storage.
+        end note
+        if (WiFi Connection?) is (not connencted) then
+            :Reconnect to WiFi;
+        else
+            -> connected;
+        endif
+        if (Webserver?) is (not active) then
+            :Restart Webserver;
+        else
+            -> active;
+        endif
+        if (WiFi Client?) is (availible) then
+            :Initiate HTTP-Communication;
+        else
+            -> not availible;
+        endif
+    repeat while (while active)
+}
+@enduml

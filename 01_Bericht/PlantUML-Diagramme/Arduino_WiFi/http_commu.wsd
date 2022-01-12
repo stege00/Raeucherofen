@@ -1,0 +1,15 @@
+@startuml
+start
+partition "HTTP Communication" {
+    while (Client availible)
+        :Read from Client;
+    endwhile
+    :Write standard HTTP 
+    response Header to client;
+    :Build HTML Source-
+    code from availible 
+    Data & write to client;
+    :Stop client;
+}
+end
+@enduml

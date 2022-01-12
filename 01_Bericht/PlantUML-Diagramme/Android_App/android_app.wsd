@@ -1,0 +1,21 @@
+@startuml android_app
+start
+partition App {
+    ->Startup; 
+    :Create & Define GUI Elements;
+    :Define Timer & Refresh Button;
+    repeat
+        if (Timer or Button?) then (true)
+            :Create Download-Complete-Listener;
+            :Start Downloader|
+            :extract Data from HTML Sourcecode;
+            :Present Data in GUI (Text & Graph);
+
+        else 
+            ->false;
+        endif
+    repeat while (app running?)
+}
+end
+
+@enduml

@@ -8,6 +8,8 @@ partition App {
         if (Timer or Button?) then (true)
             :Create Download-Complete-Listener;
             :Start Downloader|
+            detach
+            :Download-Complete-Listener active;
             :extract Data from HTML Sourcecode;
             :Present Data in GUI (Text & Graph);
 

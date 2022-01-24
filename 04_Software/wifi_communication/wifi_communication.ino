@@ -48,17 +48,17 @@ void printMacAddress(byte mac[]);
 void setup() {
   // serial startup
   Serial.begin(9600);
-  while(!Serial){
-    ;
-  }
+//  while(!Serial){
+//    ;
+//  }
 
   wifiStartup();
   wifiConnect();
   
   printCurrentNet();
   printWifiData();
-  Serial.println(server.status());
   server.begin();
+  Serial.print("Webserver Status: ");
   Serial.println(server.status());
 }
 
@@ -67,9 +67,9 @@ void loop() {
   // check the network connection once every 10 seconds:
   if (millis() - previousMillisWifi > intervalWifiInfo) {
     wifi_status = WiFi.status();
-    Serial.print("wifistatus: ");
-    Serial.println(wifi_status);
     if (wifi_status != WL_CONNECTED) {
+      Serial.print("wifistatus: ");
+      Serial.println(wifi_status);
       wifiConnect();
       printCurrentNet();
     }
@@ -78,10 +78,11 @@ void loop() {
 
   // check the webserver status once every 10 seconds:    
   if (millis() - previousMillisServer > intervalServerInfo) {
-    if (server.status() != 1)
+    if (server.status() == 0) {
       server.begin();
-    Serial.print("Server Status: ");
-    Serial.println(server.status());
+      Serial.print("Server Status (reset): ");
+      Serial.println(server.status());
+    }
     previousMillisServer = millis();
   }
 

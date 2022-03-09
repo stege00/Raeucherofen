@@ -1,88 +1,70 @@
 // includes
 #include "src\menu.h"
-#include "src\sensor.h"
+#include "src\sensors.h"
 #include "src\wifi_communication.h"
-// please enter your sensitive data in the Secret tab
-char ssid[] = SECRET_SSID;                        // your network SSID (name)
-char pass[] = SECRET_PASS;                        // your network password (use for WPA, or use as key for WEP)
 
-#define UTC_OFFSET (3600)
+// definition of storage struct
+  typedef struct sensorData
+  {
+    int humidity=0;
+    int temperature=0;
+    bool flame_detection=false;
+    bool open_door=false;
+    char date_formatted[11];
+    char time_formatted[9];
+  }sensorData;
 
-typedef struct sensorData
-{
-  int humidity=0;
-  int temperature=0;
-  bool flame_detection=false;
-  bool open_door=false;
-  char date_formatted[11];
-  char time_formatted[9];
-}sensorData;
+// global variables
+  // necessary protothreads
+  pt ptDebounce;
+  pt ptSendData;
+  pt ptSensors;
 
-// declaration of functions
+  // loop intervals
+  unsigned long previousMillisSensors = 0;          // will store last time sensor information was updated
+  unsigned long previousMillisWifi = 0;             // will store last time Wi-Fi information was updated
+  unsigned long previousMillisServer = 0;           //   "    "     "    "  Server      "      "     "
+  const int intervalSensors = 5000;                 // interval at which to update the sensor information
+  const int intervalWifiInfo = 10000;               // interval at which to update the Wi-Fi information
+  const int intervalServerInfo = 10000;             //   "       "   "    "   "     "  Server     "
 
-void getDateTime();
-void get_sensor_temperature_humidity();
-void get_sensor_fire();
-void get_sensor_hall();
-void check_buttons();
-void update_lcd();
+  // FiFo storage
+  const int ELEMENT_CNT_MAX = 20;                   // defines maximum count of datasets that are stored
+  int cnt_sensorData = 0;
+  sensorData data_latest;                           // will store latest set of sensor data
+  sensorData data_saved[ELEMENT_CNT_MAX];           // will store latest x sets of data
 
-// necessary protothreads
-pt ptDebounce;
-pt ptSendData;
-pt ptLCD;
+  // Periphery
+    // LCD
+    const int RS = 8, EN = 9, D4 = 4, D5 = 5, D6 = 6, D7 = 7;
+    LiquidCrystal lcd(RS,EN,D4,D5,D6,D7);
 
-// loop intervals
-unsigned long previousMillisSensors = 0;          // will store last time sensor information was updated
-unsigned long previousMillisWifi = 0;             // will store last time Wi-Fi information was updated
-unsigned long previousMillisServer = 0;           //   "    "     "    "  Server      "      "     "
-const int intervalSensors = 5000;                 // interval at which to update the sensor information
-const int intervalWifiInfo = 10000;               // interval at which to update the Wi-Fi information
-const int intervalServerInfo = 10000;             //   "       "   "    "   "     "  Server     "
+    // buttons
+    namespace buttons
+    {
+      const int UP = 21, DOWN = 20;
+    }
 
-// WiFi
-WiFiServer server(80);                            // set WiFi Server at port 80
-int wifi_status = WL_IDLE_STATUS;                 // the Wi-Fi radio's status
+    // fire detection
+    const int pin_flame_analog = 11;                       
+    const int pin_flame_digital = 10;
 
-// FiFo storage
-const int ELEMENT_CNT_MAX = 20;                   // defines maximum count of datasets that are stored
-int cnt_sensorData = 0;
-sensorData data_latest;                           // will store latest set of sensor data
-sensorData data_saved[ELEMENT_CNT_MAX];           // will store latest x sets of data
+    // door detection
+    const int pin_hall_analog = 12;    
 
-// LCD
-const int RS = 8, EN = 9, D4 = 4, D5 = 5, D6 = 6, D7 = 7;
-LiquidCrystal lcd(RS,EN,D4,D5,D6,D7);
-
-// menu variables
-int state_screen = 1, next_state = 0, last_state = 0;
-const int state_min = 0, state_max = 5;
-
-// buttons
-namespace buttons
-{
-  const int UP = 21, DOWN = 20;
-}
-
-// sensors
-
-// fire detection
-const int pin_flame_analog = 11;                        // flame
-const int pin_flame_digital = 10;
-const int analog_flame_threshold = 800;                 // 0... 1023
-int cnt_flame = 0;
-
-// door detection
-const int pin_hall_analog = 12;                         // hall
-const int analog_hall_threshold = 800;                  // 0... 1023
-int cnt_hall = 0;
-
+    // humidity - temperature
+    const int i2cAdress_HumTemp = 0x28;
 
 void setup() {
+  /*
+  The setup function is called once after every restart/reset of the mC.
+  It is used to initialise the needed components (e.g. pin modes, wifi connection...)
+  */
+
   // init necessary protothreads
   PT_INIT(&ptDebounce);
   PT_INIT(&ptSendData);
-  PT_INIT(&ptLCD);
+  PT_INIT(&ptSensors);
 
   // serial startup
   Serial.begin(9600);
@@ -101,7 +83,7 @@ void setup() {
 	pinMode(pin_flame_analog, INPUT);
 	pinMode(pin_flame_digital, INPUT);
 
-  //I2C
+  //I2C --> temp/humidity sensor
 	Wire.begin();
 
   // WiFi
@@ -116,12 +98,16 @@ void setup() {
 }
 
 void loop() {
+  /*
+  The loop function is continually called.
+  It is used to check the peripherals in given intervals and connected networks for changes/errors.
+  */
   
-  // check buttons and update lcd
+  // check buttons and update lcd every loop iteration
   check_buttons();
   update_lcd();
 
-  // check the network connection once every 10 seconds:
+  // check the network connection once every WiFi interval:
   if (millis() - previousMillisWifi > intervalWifiInfo) {
     wifi_status = WiFi.status();
     Serial.print("wifistatus: ");
@@ -133,7 +119,7 @@ void loop() {
     previousMillisWifi = millis();
   }
 
-  // check the webserver status once every 10 seconds:    
+  // check the webserver status once every Server-Info interval:    
   if (millis() - previousMillisServer > intervalServerInfo) {
     if (server.status() != 1)
       server.begin();
@@ -142,19 +128,15 @@ void loop() {
     previousMillisServer = millis();
   }
 
-  // get data once every interval:
+  // get data once every sensor interval:
   if (millis() - previousMillisSensors > intervalSensors) {
     previousMillisSensors = millis();
-
     PT_SCHEDULE(get_latest_data(&ptSensors));
   }
 
+  // check for new clients at the webserver every loop iteration
   WiFiClient client = server.available();
   if (client) {
     PT_SCHEDULE(httpCommunication(&ptSendData, client));
   }
 }
-
-
-
-

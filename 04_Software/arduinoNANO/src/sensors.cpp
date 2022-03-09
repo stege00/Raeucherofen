@@ -18,8 +18,8 @@ void get_latest_data(struct pt* pt) {
   status_pt1 = PT_SCHEDULE(get_sensor_fire(&ptSensorFire, 1));
   status_pt2 = PT_SCHEDULE(get_sensor_hall(&ptSensorHall));
   status_pt3 = PT_SCHEDULE(get_sensor_temperature_humidity(&ptSensorTempHum));
-
-  PT_YIELD_UNTIL(status_pt1 | status_pt2 | status_pt3);
+  // PT_SCHEDULE returns int: 0 if finished, nonzero if still running
+  PT_WAIT_WHILE(status_pt1 | status_pt2 | status_pt3);
 
   if (cnt_sensorData >= ELEMENT_CNT_MAX) {
     // first in first out storage:
@@ -36,6 +36,10 @@ void get_latest_data(struct pt* pt) {
 }
 
 void getDateTime() {
+  /*
+  Function to get current Date and Time via the WiFi module.
+  */
+
   unsigned long epochTime = WiFi.getTime() + UTC_OFFSET;               // time since 1.1.1970 in sec.
   int currentYear = year(epochTime);
   int currentMonth = month(epochTime);
@@ -54,10 +58,11 @@ int get_sensor_temperature_humidity(struct pt* pt) {
   Requests sensor data via I2C (adress of HYT221 is 0x28).
   First two bytes are humidity the last two are temperature.
   */
+
   PT_BEGIN(pt);
 
-  Wire.beginTransmission(0x28);
-  Wire.requestFrom(0x28, 4);
+  Wire.beginTransmission(i2cAdress_HumTemp);
+  Wire.requestFrom(i2cAdress_HumTemp, 4);
 
   PT_YIELD_UNTIL(pt, (Wire.availible == 4));
 
@@ -83,7 +88,6 @@ int get_sensor_temperature_humidity(struct pt* pt) {
 
   data_latest.humidity = rawHumidity;
   data_latest.temperature = rawTemperature;
-
 
   PT_END(pt);
 }

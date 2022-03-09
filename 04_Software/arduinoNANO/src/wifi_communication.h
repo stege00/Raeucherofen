@@ -14,7 +14,6 @@ int httpCommunication(struct pt* pt, WiFiClient client);
 String sendHTML();
 
 // WiFi
-const char ssid[] = SECRET_SSID;                  // your network SSID (name)
-const char pass[] = SECRET_PASS;                  // your network password (use for WPA, or use as key for WEP)   
-WiFiServer server(80);                            // set WiFi Server at port 80
-int wifi_status = WL_IDLE_STATUS;                 // the Wi-Fi radio's status
+extern const char ssid[];                  // your network SSID (name)
+extern const char pass[];                  // your network password (use for WPA, or use as key for WEP)   
+extern int wifi_status;                    // the Wi-Fi radio's status

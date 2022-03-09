@@ -1,5 +1,18 @@
 #include "sensor.h"
 
+// FiFo storage
+const int ELEMENT_CNT_MAX = 20;                         // defines maximum count of datasets that are stored
+int cnt_sensorData = 0;
+sensorData data_latest;                                 // will store latest set of sensor data
+sensorData data_saved[ELEMENT_CNT_MAX];                 // will store latest x sets of data
+
+// Sensor variables
+const int analog_flame_threshold = 800;                 // 0... 1023
+int cnt_flame = 0;                                      // counts flame detections in given tries
+const int analog_hall_threshold = 800;
+int cnt_hall = 0;
+
+
 // necessary protothreads
 pt ptSensorFire;
 pt ptSensorHall;

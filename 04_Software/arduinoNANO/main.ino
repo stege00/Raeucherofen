@@ -9,6 +9,9 @@
   pt ptSendData;
   pt ptSensors;
 
+  //
+  WiFiServer server(80);                            // set WiFi Server at port 80
+
   // loop intervals
   unsigned long previousMillisSensors = 0;          // will store last time sensor information was updated
   unsigned long previousMillisWifi = 0;             // will store last time Wi-Fi information was updated

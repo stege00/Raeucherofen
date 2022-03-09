@@ -3,17 +3,6 @@
 #include "src\sensors.h"
 #include "src\wifi_communication.h"
 
-// definition of storage struct
-  typedef struct sensorData
-  {
-    int humidity=0;
-    int temperature=0;
-    bool flame_detection=false;
-    bool open_door=false;
-    char date_formatted[11];
-    char time_formatted[9];
-  }sensorData;
-
 // global variables
   // necessary protothreads
   pt ptDebounce;
@@ -27,12 +16,6 @@
   const int intervalSensors = 5000;                 // interval at which to update the sensor information
   const int intervalWifiInfo = 10000;               // interval at which to update the Wi-Fi information
   const int intervalServerInfo = 10000;             //   "       "   "    "   "     "  Server     "
-
-  // FiFo storage
-  const int ELEMENT_CNT_MAX = 20;                   // defines maximum count of datasets that are stored
-  int cnt_sensorData = 0;
-  sensorData data_latest;                           // will store latest set of sensor data
-  sensorData data_saved[ELEMENT_CNT_MAX];           // will store latest x sets of data
 
   // Periphery
     // LCD
@@ -54,6 +37,7 @@
 
     // humidity - temperature
     const int i2cAdress_HumTemp = 0x28;
+
 
 void setup() {
   /*

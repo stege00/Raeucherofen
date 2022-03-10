@@ -1,2 +1,2 @@
 #define SECRET_SSID "WLAN-Name"
-#define SECRET_PASS "xxx"
+#define SECRET_PASS "XXX"

@@ -64,11 +64,11 @@ const uint8_t button_UP = 21;
 const uint8_t button_DOWN = 20;
 
 // fire detection
-const uint8_t pin_flame_analog = 11;                       
-const uint8_t pin_flame_digital = 10;
+const uint8_t pin_flame_analog = 3;                       
+const uint8_t pin_flame_digital = 2;
 
 // door detection
-const uint8_t pin_hall_analog = 12;    
+const uint8_t pin_hall_analog = 10;    
 
 // humidity - temperature
 const int i2cAdress_HumTemp = 0x28;
@@ -166,9 +166,9 @@ void setup() {
   
   printCurrentNet();
   printWifiData();
-  Serial.println(server.status());
+  //Serial.println(server.status());
   server.begin();
-  Serial.println(server.status());
+  //Serial.println(server.status());
 }
 
 /***********************************************************************************************************************************
@@ -188,8 +188,8 @@ void loop() {
   // check the network connection once every WiFi interval:
   if (millis() - previousMillisWifi > intervalWifiInfo) {
     wifi_status = WiFi.status();
-    Serial.print("wifistatus: ");
-    Serial.println(wifi_status);
+    //Serial.print("wifistatus: ");
+    //Serial.println(wifi_status);
     if (wifi_status != WL_CONNECTED) {
       wifiConnect();
       printCurrentNet();
@@ -201,15 +201,17 @@ void loop() {
   if (millis() - previousMillisServer > intervalServerInfo) {
     if (server.status() != 1)
       server.begin();
-    Serial.print("Server Status: ");
-    Serial.println(server.status());
+    //Serial.print("Server Status: ");
+    //Serial.println(server.status());
     previousMillisServer = millis();
   }
 
   // get data once every sensor interval:
   if (millis() - previousMillisSensors > intervalSensors) {
     previousMillisSensors = millis();
+    Serial.println("start sensor reading\n");
     PT_SCHEDULE(get_latest_data(&ptSensors));
+    Serial.println("end sensor reading\n");
   }
 
   // check for new clients at the webserver every loop iteration
@@ -507,7 +509,8 @@ SENSORS
 
 int get_latest_data(struct pt* pt) {
   PT_BEGIN(pt);  
-
+  Serial.println("start sensor reading protothread");
+  
   getDateTime();
 
   status_pt1 = PT_SCHEDULE(get_sensor_fire(&ptSensorFire, 1));
@@ -515,7 +518,9 @@ int get_latest_data(struct pt* pt) {
   status_pt3 = PT_SCHEDULE(get_sensor_temperature_humidity(&ptSensorTempHum));
   // PT_SCHEDULE returns int: 0 if finished, nonzero if still running
   PT_WAIT_WHILE(pt, status_pt1 | status_pt2 | status_pt3);
-
+  Serial.print("latest temp+hum: ");
+  Serial.print(data_latest.temperature);
+  Serial.println(data_latest.humidity);
   if (cnt_sensorData >= ELEMENT_CNT_MAX) {
     // first in first out storage:
     for (int i=0; i < ELEMENT_CNT_MAX - 1; i++){
@@ -555,6 +560,7 @@ int get_sensor_temperature_humidity(struct pt* pt) {
   */
 
   PT_BEGIN(pt);
+  Serial.println("start temp reading protothread");
 
   Wire.beginTransmission(i2cAdress_HumTemp);
   Wire.requestFrom(i2cAdress_HumTemp, 4);
@@ -583,6 +589,9 @@ int get_sensor_temperature_humidity(struct pt* pt) {
 
   data_latest.humidity = rawHumidity;
   data_latest.temperature = rawTemperature;
+  Serial.println("sensor temperature/humidity");
+  Serial.print("raw data: ");
+  Serial.println(c1);
 
   PT_END(pt);
 }
@@ -593,6 +602,7 @@ int get_sensor_fire(struct pt* pt, int para) {
   Reads repeatedly sensor data to circumvent bouncing of sensor, if more than 60% of the Sensorvalues show positive, give positive flamedetection back.
   */
   PT_BEGIN(pt);
+  Serial.println("start fire reading protothread");
 
   cnt_flame = 0;
 
@@ -616,7 +626,7 @@ int get_sensor_fire(struct pt* pt, int para) {
   {
     data_latest.flame_detection = false;
   }
-
+  Serial.println("sensor flame");
   PT_END(pt);
 }
 
@@ -626,6 +636,7 @@ int get_sensor_hall(struct pt* pt) {
   Reads repeatedly sensor data to circumvent bouncing of sensor, if less than 50% of the Sensorvalues show positive, give open door detection back.
   */
 	PT_BEGIN(pt);
+  Serial.println("start door reading protothread");
 
   cnt_hall = 0;
 
@@ -645,6 +656,6 @@ int get_sensor_hall(struct pt* pt) {
   {
     data_latest.open_door = false;
   }
-
+  Serial.println("sensor open door");
   PT_END(pt);
 }

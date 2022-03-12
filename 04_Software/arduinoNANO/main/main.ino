@@ -76,9 +76,12 @@ const int i2cAdress_HumTemp = 0x28;
 /************************************************************* LOOP ****************************************************************/
 
 // necessary protothreads (used in loop)
-  pt ptDebounce;
-  pt ptSendData;
-  pt ptSensors;
+  pt ptButtons;
+  pt ptWiFiCommunication;
+  pt ptData;
+  pt ptSensorTempHum;
+  pt ptSensorFire;
+  pt ptSensorHall;
   
 // loop intervals
   unsigned long previousMillisSensors = 0;          // will store last time sensor information was updated
@@ -91,6 +94,7 @@ const int i2cAdress_HumTemp = 0x28;
 /****************************************************** WIFI COMMUNICATION ********************************************************/
 
 WiFiServer server(80);                            // set WiFi Server at port 80
+WiFiClient client;
 
 const char ssid[] = SECRET_SSID;                  // your network SSID (name)
 const char pass[] = SECRET_PASS;                  // your network password (use for WPA, or use as key for WEP)   
@@ -103,22 +107,20 @@ const int ELEMENT_CNT_MAX = 20;                         // defines maximum count
 int cnt_sensorData = 0;
 sensorData data_latest;                                 // will store latest set of sensor data
 sensorData data_saved[ELEMENT_CNT_MAX];                 // will store latest x sets of data
+boolean sensor_timeout;
 
 // Sensor variables
-const int analog_flame_threshold = 800;                 // 0... 1023
+int flame_detct_cnt = 0;                                // counts flame detection tries
 int cnt_flame = 0;                                      // counts flame detections in given tries
-const int analog_hall_threshold = 800;
+const int analog_flame_threshold = 800;                 // 0... 1023
+int hall_detct_cnt = 0;                                // counts flame detection tries
 int cnt_hall = 0;
-
-// necessary protothreads
-pt ptSensorFire;
-pt ptSensorHall;
-pt ptSensorTempHum;
+const int analog_hall_threshold = 800;
 
 // status of protothreads
-int status_pt1 = 1;
-int status_pt2 = 1;
-int status_pt3 = 1;
+int status_ptSensorTempHum = 0;                         // 1 = protothread active
+int status_ptSensorFire = 0;                            
+int status_ptSensorHall = 0;                            
 
 /************************************************************* MENU ***************************************************************/
 
@@ -136,9 +138,12 @@ void setup() {
   */
 
   // init necessary protothreads
-  PT_INIT(&ptDebounce);
-  PT_INIT(&ptSendData);
-  PT_INIT(&ptSensors);
+  PT_INIT(&ptButtons);
+  PT_INIT(&ptWiFiCommunication);
+  PT_INIT(&ptData);
+  PT_INIT(&ptSensorTempHum);
+  PT_INIT(&ptSensorFire);
+  PT_INIT(&ptSensorHall);
 
   // serial startup
   Serial.begin(9600);
@@ -180,17 +185,27 @@ void loop() {
   The loop function is continually called.
   It is used to check the peripherals in given intervals and connected networks for changes/errors.
   */
-  
-  // check buttons and update lcd every loop iteration
-  check_buttons(&ptDebounce);
   update_lcd();
+  PT_SCHEDULE(check_buttons(&ptButtons));
+
+  PT_SCHEDULE(get_latest_data(&ptData));
+  PT_SCHEDULE(get_sensor_temperature_humidity(&ptSensorTempHum));
+  PT_SCHEDULE(get_sensor_fire(&ptSensorFire, 1));
+  PT_SCHEDULE(get_sensor_hall(&ptSensorHall));
+
+
+  // check for new clients at the webserver every loop iteration
+  client = server.available();
+  if (client)
+    httpCommunication(client);
 
   // check the network connection once every WiFi interval:
   if (millis() - previousMillisWifi > intervalWifiInfo) {
     wifi_status = WiFi.status();
-    //Serial.print("wifistatus: ");
-    //Serial.println(wifi_status);
+    
     if (wifi_status != WL_CONNECTED) {
+      Serial.print("WiFi disconnected:\nwifistatus: ");
+      Serial.println(wifi_status);
       wifiConnect();
       printCurrentNet();
     }
@@ -199,26 +214,16 @@ void loop() {
 
   // check the webserver status once every Server-Info interval:    
   if (millis() - previousMillisServer > intervalServerInfo) {
-    if (server.status() != 1)
+
+    if (server.status() != 1) {
+      Serial.print("Server Status: ");
+      Serial.println(server.status());
+      Serial.println("Restarting Server");
       server.begin();
-    //Serial.print("Server Status: ");
-    //Serial.println(server.status());
+    }
     previousMillisServer = millis();
   }
-
-  // get data once every sensor interval:
-  if (millis() - previousMillisSensors > intervalSensors) {
-    previousMillisSensors = millis();
-    Serial.println("start sensor reading\n");
-    PT_SCHEDULE(get_latest_data(&ptSensors));
-    Serial.println("end sensor reading\n");
-  }
-
-  // check for new clients at the webserver every loop iteration
-  WiFiClient client = server.available();
-  if (client) {
-    PT_SCHEDULE(httpCommunication(&ptSendData, client));
-  }
+ 
 }
 
 /***********************************************************************************************************************************
@@ -229,31 +234,38 @@ int check_buttons(struct pt* pt) {
   /*
   function to check input from buttons and debounce if needed
   */
-
   PT_BEGIN(pt);
 
-  if(digitalRead(button_DOWN))
-  {
-    PT_SLEEP(pt, 5);
+
+  for(;;) {
+
     if(digitalRead(button_DOWN))
     {
-		  if(state_screen!=state_min)
-		  {
-		    next_state-=1;
-		  }
-      PT_YIELD_UNTIL(pt, !digitalRead(button_DOWN));
+      PT_SLEEP(pt, 5);
+      if(digitalRead(button_DOWN))
+      {
+        if(state_screen!=state_min)
+        {
+          next_state-=1;
+        }
+        PT_YIELD_UNTIL(pt, !digitalRead(button_DOWN));
+      }
     }
-  }
-  if(digitalRead(button_UP))
-  {
-    PT_SLEEP(pt, 5);
-    if(digitalRead(button_UP))
+    else if(digitalRead(button_UP))
     {
-		  if(state_screen!=state_max)
-		  {
-		    next_state+=1;
-		  }
-      PT_YIELD_UNTIL(pt, !digitalRead(button_UP));
+      PT_SLEEP(pt, 5);
+      if(digitalRead(button_UP))
+      {
+        if(state_screen!=state_max)
+        {
+          next_state+=1;
+        }
+        PT_YIELD_UNTIL(pt, !digitalRead(button_UP));
+      }
+    }
+    else
+    {
+      PT_YIELD(pt);
     }
   }
 
@@ -414,46 +426,50 @@ void printMacAddress(byte mac[]) {
   Serial.println();
 }
 
-int httpCommunication(struct pt* pt, WiFiClient client) {
-  PT_BEGIN(pt);
-
+int httpCommunication(WiFiClient client) {
   Serial.println("new client");
   // an http request ends with a blank line
   boolean currentLineIsBlank = true;
+
   while (client.connected()) {
+
     if (client.available()) {
+
       char c = client.read();
       Serial.write(c);
+
       // the http request has ended, if it is the end of
       // the line (we received a newline character) and the
       // line is blank, so we can send a reply
+
       if (c == '\n' && currentLineIsBlank) {
+
         // send a standard http response header
         client.println("HTTP/1.1 200 OK");
         client.println("Content-Type: text/html");
-        client.println("Connection: close");    // the connection will be closed after completion of the response
+        client.println("Connection: close");      // the connection will be closed after completion of the response
         //client.println("Refresh: 10");          // refresh the page automatically every 10 sec
         client.println();
         client.print(sendHTML());
         break;
       }
       if (c == '\n') {
+
         // you're starting a new line
         currentLineIsBlank = true;
       } else if (c != '\r') {
+
         // you've gotten a character on the current line
         currentLineIsBlank = false;
       }
     }
   }
   // give the web browser time to receive the data
-  PT_SLEEP(pt, 1);
+  delay(1);
 
   // close the connection:
   client.stop();
   Serial.println("client disconnected");
-
-  PT_END(pt);
 }
 
 String sendHTML() {
@@ -506,32 +522,50 @@ String sendHTML() {
 SENSORS
 ************************************************************************************************************************************/
 
-
 int get_latest_data(struct pt* pt) {
   PT_BEGIN(pt);  
-  Serial.println("start sensor reading protothread");
-  
-  getDateTime();
 
-  status_pt1 = PT_SCHEDULE(get_sensor_fire(&ptSensorFire, 1));
-  status_pt2 = PT_SCHEDULE(get_sensor_hall(&ptSensorHall));
-  status_pt3 = PT_SCHEDULE(get_sensor_temperature_humidity(&ptSensorTempHum));
-  // PT_SCHEDULE returns int: 0 if finished, nonzero if still running
-  PT_WAIT_WHILE(pt, status_pt1 | status_pt2 | status_pt3);
-  Serial.print("latest temp+hum: ");
-  Serial.print(data_latest.temperature);
-  Serial.println(data_latest.humidity);
-  if (cnt_sensorData >= ELEMENT_CNT_MAX) {
-    // first in first out storage:
-    for (int i=0; i < ELEMENT_CNT_MAX - 1; i++){
-      data_saved[i]=data_saved[i+1];
+  for(;;) {  
+    // get data once every sensor interval:
+    if (millis() - previousMillisSensors > intervalSensors) {
+      Serial.println("\nStart getting data:");
+      status_ptSensorTempHum = 1;
+      status_ptSensorFire = 1;
+      status_ptSensorHall = 1;
+      previousMillisSensors = millis();
+
+      getDateTime();
+
+      PT_SLEEP(pt, 5);
+
+      Serial.println("waiting for sensors");
+
+      PT_YIELD_UNTIL(pt, ((status_ptSensorTempHum || status_ptSensorFire || status_ptSensorHall) == 0) || (sensor_timeout = millis() - previousMillisSensors > 500));
+      if (sensor_timeout)
+      {
+        Serial.println("sensors timed out");
+      } else
+      {
+        Serial.println("sensors finished");
+      }
+      
+      if (cnt_sensorData >= ELEMENT_CNT_MAX) {
+        // first in first out storage:
+        for (int i=0; i < ELEMENT_CNT_MAX - 1; i++){
+          data_saved[i]=data_saved[i+1];
+        }
+        data_saved[ELEMENT_CNT_MAX - 1] = data_latest;
+      }else {
+        data_saved[cnt_sensorData]=data_latest;
+        cnt_sensorData += 1;
+      }
     }
-    data_saved[ELEMENT_CNT_MAX - 1] = data_latest;
-  }else {
-    data_saved[cnt_sensorData]=data_latest;
-    cnt_sensorData += 1;
+    else
+    {
+      PT_YIELD(pt);
+    }
+    
   }
-
   PT_END(pt);
 }
 
@@ -560,38 +594,63 @@ int get_sensor_temperature_humidity(struct pt* pt) {
   */
 
   PT_BEGIN(pt);
-  Serial.println("start temp reading protothread");
 
-  Wire.beginTransmission(i2cAdress_HumTemp);
-  Wire.requestFrom(i2cAdress_HumTemp, 4);
 
-  PT_YIELD_UNTIL(pt, (Wire.available() == 4));
+  for(;;) {  
 
-  // Read the bytes if they are available
-  int c1 = Wire.read();
-  int c2 = Wire.read();
-  int c3 = Wire.read();
-  int c4 = Wire.read();
-  
-  Wire.endTransmission();
+    // get data once every sensor interval:
+    if (status_ptSensorTempHum == 1) {
+      Serial.println("start i2c");
 
-  // combine bytes
-  int rawHumidity = c1 << 8 | c2;
-  // first two bits are status/stall bits --> compound bitwise to get 14 bit measurement
-  rawHumidity =  (rawHumidity &= 0x3FFF);
-  rawHumidity = (rawHumidity * 1000) >> 14;           // sensordata in permille
+      Wire.beginTransmission(i2cAdress_HumTemp);
+      Wire.requestFrom(i2cAdress_HumTemp, 4);
+      Serial.println("i2c request, waiting for answer");
 
-  // Mask away 2 least significant bits (14 bit measurement)
-  c4 = (c4 >> 2);
-  // combine bytes
-  int rawTemperature = c3 << 6 | c4;
-  rawTemperature = ((1650 * rawTemperature) >> 14) - 40;    // sensordata factor 10 to big
+      PT_SLEEP(pt, 20);
+      Serial.println("available stuff:");
+      while (Wire.available())
+      {
+        int c = Wire.read();
+        Serial.println(c);
+      }
 
-  data_latest.humidity = rawHumidity;
-  data_latest.temperature = rawTemperature;
-  Serial.println("sensor temperature/humidity");
-  Serial.print("raw data: ");
-  Serial.println(c1);
+      PT_YIELD_UNTIL(pt, (Wire.available() == 4));
+      Serial.println("i2c available");
+
+      
+      // Read the bytes if they are available
+      int c1 = Wire.read();
+      int c2 = Wire.read();
+      int c3 = Wire.read();
+      int c4 = Wire.read();
+      
+      Wire.endTransmission();
+
+      // combine bytes
+      int rawHumidity = c1 << 8 | c2;
+      // first two bits are status/stall bits --> compound bitwise to get 14 bit measurement
+      rawHumidity =  (rawHumidity &= 0x3FFF);
+      rawHumidity = (rawHumidity * 1000) >> 14;           // sensordata in permille
+
+      // Mask away 2 least significant bits (14 bit measurement)
+      c4 = (c4 >> 2);
+      // combine bytes
+      int rawTemperature = c3 << 6 | c4;
+      rawTemperature = ((1650 * rawTemperature) >> 14) - 40;    // sensordata factor 10 to big
+
+      data_latest.humidity = rawHumidity;
+      data_latest.temperature = rawTemperature;
+      Serial.println("sensor temperature/humidity");
+      Serial.print("raw data: ");
+      Serial.println(c1);
+
+      status_ptSensorTempHum = 0;
+    }
+    else
+    {
+      PT_YIELD(pt);
+    }
+  }
 
   PT_END(pt);
 }
@@ -601,32 +660,48 @@ int get_sensor_fire(struct pt* pt, int para) {
   Function to get sensor data from the fire detection sensor module.
   Reads repeatedly sensor data to circumvent bouncing of sensor, if more than 60% of the Sensorvalues show positive, give positive flamedetection back.
   */
+
   PT_BEGIN(pt);
-  Serial.println("start fire reading protothread");
 
-  cnt_flame = 0;
 
-  for (int i = 0; i < 10; i++)
-  {
-    if (para && (analogRead(pin_flame_analog) > analog_flame_threshold)) {
-      cnt_flame ++;
+  for(;;) {  
+
+    // get data once every sensor interval:
+    if (status_ptSensorFire == 1) {
+      cnt_flame = 0;
+
+      for (flame_detct_cnt = 0; flame_detct_cnt < 10; flame_detct_cnt++)
+      {
+        
+        if (para && (analogRead(pin_flame_analog) > analog_flame_threshold)) 
+        {
+          cnt_flame ++;
+        }
+        else if (!para && (digitalRead(pin_flame_digital)))
+        {
+          cnt_flame ++;
+        }
+        PT_SLEEP(pt, 5);
+      }
+
+      if (cnt_flame > 6) 
+      {
+        data_latest.flame_detection = true;
+      }
+      else
+      {
+        data_latest.flame_detection = false;
+      }
+      status_ptSensorFire = 0;
+      Serial.println("Fire-Sensor finished");
+
     }
-    else if (!para && (digitalRead(pin_flame_digital)))
+    else
     {
-      cnt_flame ++;
+      PT_YIELD(pt);
     }
-    PT_SLEEP(pt, 5);
   }
 
-  if (cnt_flame > 6) 
-  {
-    data_latest.flame_detection = true;
-  }
-  else
-  {
-    data_latest.flame_detection = false;
-  }
-  Serial.println("sensor flame");
   PT_END(pt);
 }
 
@@ -636,26 +711,40 @@ int get_sensor_hall(struct pt* pt) {
   Reads repeatedly sensor data to circumvent bouncing of sensor, if less than 50% of the Sensorvalues show positive, give open door detection back.
   */
 	PT_BEGIN(pt);
-  Serial.println("start door reading protothread");
 
-  cnt_hall = 0;
 
-  for (int i = 0; i < 10; i++)
-  {
-    if (analogRead(pin_hall_analog) > analog_hall_threshold) {
-      cnt_hall ++;
+  for(;;) {  
+
+    // get data once every sensor interval:
+    if (status_ptSensorHall == 1) {
+      
+      cnt_hall = 0;
+
+      for (hall_detct_cnt = 0; hall_detct_cnt < 10; hall_detct_cnt++)
+      {
+        if (analogRead(pin_hall_analog) > analog_hall_threshold) {
+          cnt_hall ++;
+        }
+        PT_SLEEP(pt, 5);
+      }
+
+      if (cnt_hall < 5) 
+      {
+        data_latest.open_door = true;
+      }
+      else
+      {
+        data_latest.open_door = false;
+      }
+      status_ptSensorHall = 0;
+      Serial.println("Hall-Sensor finished");
+
     }
-    PT_SLEEP(pt, 5);
+    else
+    {
+      PT_YIELD(pt);
+    }
   }
 
-  if (cnt_hall < 5) 
-  {
-    data_latest.open_door = true;
-  }
-  else
-  {
-    data_latest.open_door = false;
-  }
-  Serial.println("sensor open door");
   PT_END(pt);
 }

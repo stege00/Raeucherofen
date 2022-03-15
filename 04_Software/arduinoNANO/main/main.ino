@@ -60,6 +60,7 @@ const int RS = 8, EN = 9, D4 = 4, D5 = 5, D6 = 6, D7 = 7;
 LiquidCrystal lcd(RS,EN,D4,D5,D6,D7);
 
 // buttons
+const uint8_t button_CONFIRM = 15;								  
 const uint8_t button_UP = 21;
 const uint8_t button_DOWN = 20;
 
@@ -157,6 +158,7 @@ void setup() {
   // button
 	pinMode(button_UP, INPUT);
 	pinMode(button_DOWN, INPUT);
+	pinMode(button_CONFIRM, INPUT);						 
 
   //flame sensor
 	pinMode(pin_flame_analog, INPUT);
@@ -187,10 +189,10 @@ void loop() {
   */
   update_lcd();
   PT_SCHEDULE(check_buttons(&ptButtons));
-
+  
   PT_SCHEDULE(get_latest_data(&ptData));
   PT_SCHEDULE(get_sensor_temperature_humidity(&ptSensorTempHum));
-  PT_SCHEDULE(get_sensor_fire(&ptSensorFire, 1));
+  PT_SCHEDULE(get_sensor_fire(&ptSensorFire, 0));
   PT_SCHEDULE(get_sensor_hall(&ptSensorHall));
 
 
@@ -223,7 +225,7 @@ void loop() {
     }
     previousMillisServer = millis();
   }
- 
+
 }
 
 /***********************************************************************************************************************************
@@ -263,6 +265,18 @@ int check_buttons(struct pt* pt) {
         PT_YIELD_UNTIL(pt, !digitalRead(button_UP));
       }
     }
+	  else if(digitalRead(button_CONFIRM))
+    {
+      PT_SLEEP(pt, 5);
+      if(digitalRead(button_CONFIRM))
+      {
+        if(state_screen!=state_max)
+        {
+          Serial.println("Button Confirm");
+        }
+        PT_YIELD_UNTIL(pt, !digitalRead(button_UP));
+      }
+    }									
     else
     {
       PT_YIELD(pt);
@@ -273,6 +287,7 @@ int check_buttons(struct pt* pt) {
 }
 
 void update_lcd() {
+  lcd.clear();	  
   last_state=state_screen;
   state_screen=next_state;
   //state_machine
@@ -334,6 +349,7 @@ void update_lcd() {
         lcd.print("error ");
       }
   }
+  delay(45);	                                    //replace with protothreads
 }
 
 /***********************************************************************************************************************************
@@ -672,7 +688,7 @@ int get_sensor_fire(struct pt* pt, int para) {
 
       for (flame_detct_cnt = 0; flame_detct_cnt < 10; flame_detct_cnt++)
       {
-        
+
         if (para && (analogRead(pin_flame_analog) > analog_flame_threshold)) 
         {
           cnt_flame ++;

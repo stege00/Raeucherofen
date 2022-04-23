@@ -287,6 +287,7 @@ int check_buttons(struct pt* pt) {
 }
 
 void update_lcd() {
+
   lcd.clear();	  
   last_state=state_screen;
   state_screen=next_state;
@@ -302,13 +303,16 @@ void update_lcd() {
       case 1:							//data temp
       {
         lcd.print("Temp: ");
-        lcd.print((float)data_latest.temperature);
+        lcd.print((float)data_latest.temperature, 0);
+		lcd.print(" \xdf");				// ° Symbol
+		lcd.print("C");
         break;
       }
       case 2:							//data humi
       {
-		    lcd.print("Feucht: ");
-        lcd.print((float)data_latest.humidity);
+		lcd.print("Feucht: ");
+        lcd.print((float)data_latest.humidity, 0);
+		lcd.print(" %");
         break;
       }
       case 3:							//data fire
@@ -621,8 +625,8 @@ int get_sensor_temperature_humidity(struct pt* pt) {
       Wire.beginTransmission(i2cAdress_HumTemp);
       Wire.requestFrom(i2cAdress_HumTemp, 4);
       Serial.println("i2c request, waiting for answer");
-
-      PT_SLEEP(pt, 20);
+	
+      /*PT_SLEEP(pt, 20);								Code generates errors in I2C communication
       Serial.println("available stuff:");
       while (Wire.available())
       {
@@ -633,7 +637,8 @@ int get_sensor_temperature_humidity(struct pt* pt) {
       PT_YIELD_UNTIL(pt, (Wire.available() == 4));
       Serial.println("i2c available");
 
-      
+      */
+	  
       // Read the bytes if they are available
       int c1 = Wire.read();
       int c2 = Wire.read();
@@ -646,20 +651,18 @@ int get_sensor_temperature_humidity(struct pt* pt) {
       int rawHumidity = c1 << 8 | c2;
       // first two bits are status/stall bits --> compound bitwise to get 14 bit measurement
       rawHumidity =  (rawHumidity &= 0x3FFF);
-      rawHumidity = (rawHumidity * 1000) >> 14;           // sensordata in permille
-
+	  rawHumidity = 100.0 / pow(2,14) * rawHumidity;		//sensordata in permille
       // Mask away 2 least significant bits (14 bit measurement)
       c4 = (c4 >> 2);
       // combine bytes
       int rawTemperature = c3 << 6 | c4;
-      rawTemperature = ((1650 * rawTemperature) >> 14) - 40;    // sensordata factor 10 to big
-
-      data_latest.humidity = rawHumidity;
+	  rawTemperature = 165.0 / pow(2,14) * rawTemperature - 40; // sensordata factor 10 to big
+      
+	  data_latest.humidity = rawHumidity;
       data_latest.temperature = rawTemperature;
       Serial.println("sensor temperature/humidity");
       Serial.print("raw data: ");
       Serial.println(c1);
-
       status_ptSensorTempHum = 0;
     }
     else

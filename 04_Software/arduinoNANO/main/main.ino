@@ -76,6 +76,7 @@ const int i2cAdress_HumTemp = 0x28;
 
 //LED
 const uint8_t LED_red = 14;
+const bool LED_status = HIGH;
 
 /************************************************************* LOOP ****************************************************************/
 
@@ -299,42 +300,42 @@ void update_lcd() {
   state_screen=next_state;
   //state_machine
   
-  //LED out
-  if(data_latest.flame_detection)
-			  {
-				digitalWrite(LED_red, HIGH);
-			  }
-		    else
-			  {
-				digitalWrite(LED_red, LOW);
-			  }
+  //LED out for firedetektion not final version
+	if(data_latest.flame_detection)
+	  {
+		digitalWrite(LED_red, HIGH);
+	  }
+	else
+	  {
+		digitalWrite(LED_red, LOW);
+	  }
   
   
   switch (state_screen)
   {
-      case 0:							  //all sensors
+      case 0:							  			//headpage
       {
         lcd.print("Studienarbeit");
 		lcd.setCursor(0,1);
 		lcd.print("TEL19GR3    2022");
         break;
       }
-      case 1:							//data temp
+      case 1:										//data temp
       {
         lcd.print("Temp: ");
         lcd.print((float)data_latest.temperature, 0);
-		lcd.print(" \xdf");				// ° Symbol
+		lcd.print(" \xdf");							// ° Symbol
 		lcd.print("C");
         break;
       }
-      case 2:							//data humi
+      case 2:										//data humi
       {
 		lcd.print("Feucht: ");
         lcd.print((float)data_latest.humidity, 0);
 		lcd.print(" %");
         break;
       }
-      case 3:							//data fire
+      case 3:										//data fire
       {
         lcd.print("Feuer: ");
         if(data_latest.flame_detection)
@@ -349,7 +350,7 @@ void update_lcd() {
 		    // lcd.print(get_sensor_fire(1));
         break;
       }
-      case 4:							//data hall
+      case 4:										//data hall
       {
         lcd.print("Tuer ");
         if(data_latest.open_door)
@@ -362,7 +363,7 @@ void update_lcd() {
 			  }
         break;
       }
-      case 5:												//show all
+      case 5:										//show all
       {
         lcd.print("Te: ");
 		lcd.print((float)data_latest.temperature, 0);

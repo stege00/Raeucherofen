@@ -60,7 +60,7 @@ const int RS = 8, EN = 9, D4 = 4, D5 = 5, D6 = 6, D7 = 7;
 LiquidCrystal lcd(RS,EN,D4,D5,D6,D7);
 
 // buttons
-const uint8_t button_CONFIRM = 15;								  
+const uint8_t button_CONFIRM = 15;						  
 const uint8_t button_UP = 21;
 const uint8_t button_DOWN = 20;
 
@@ -73,6 +73,9 @@ const uint8_t pin_hall_analog = 10;
 
 // humidity - temperature
 const int i2cAdress_HumTemp = 0x28;
+
+//LED
+const uint8_t LED_red = 14;
 
 /************************************************************* LOOP ****************************************************************/
 
@@ -126,7 +129,7 @@ int status_ptSensorHall = 0;
 /************************************************************* MENU ***************************************************************/
 
 int state_screen = 1, next_state = 0, last_state = 0;
-const int state_min = 0, state_max = 5;
+const int state_min = 0, state_max = 6;
 
 /***********************************************************************************************************************************
 SETUP
@@ -155,6 +158,9 @@ void setup() {
   // LCD
 	lcd.begin(16,2);    //set 16 columns and 2 rows of 16x2 LCD
   
+  //LED 
+	pinMode(LED_red, OUTPUT);
+
   // button
 	pinMode(button_UP, INPUT);
 	pinMode(button_DOWN, INPUT);
@@ -292,12 +298,25 @@ void update_lcd() {
   last_state=state_screen;
   state_screen=next_state;
   //state_machine
-
+  
+  //LED out
+  if(data_latest.flame_detection)
+			  {
+				digitalWrite(LED_red, HIGH);
+			  }
+		    else
+			  {
+				digitalWrite(LED_red, LOW);
+			  }
+  
+  
   switch (state_screen)
   {
       case 0:							  //all sensors
       {
-        lcd.print("Case 0 ");
+        lcd.print("Studienarbeit");
+		lcd.setCursor(0,1);
+		lcd.print("TEL19GR3    2022");
         break;
       }
       case 1:							//data temp
@@ -343,9 +362,58 @@ void update_lcd() {
 			  }
         break;
       }
-      case 5:
+      case 5:												//show all
       {
-        lcd.print("Case 5 ");
+        lcd.print("Te: ");
+		lcd.print((float)data_latest.temperature, 0);
+		lcd.print("\xdf");				// ° Symbol
+		lcd.print("C ");
+		lcd.print("Hu: ");
+        lcd.print((float)data_latest.humidity, 0);
+		lcd.print("%");
+		lcd.setCursor(0,1);
+		lcd.print("Tu: ");
+		if(data_latest.open_door)
+			  {
+				  lcd.print("auf ");
+			  }
+		    else
+			  {
+				  lcd.print("zu   ");
+			  }
+		lcd.print(" Fi: ");
+        if(data_latest.flame_detection)
+			  {
+				  lcd.print("Yes");
+			  }
+		    else
+			  {
+				  lcd.print("No");
+			  }
+        break;
+      }
+	  case 6:										//Network
+      {
+        lcd.print("Netz:");
+		switch(wifi_status)
+		{
+			case 3:
+			{
+				lcd.print(" OK");
+				break;
+			}
+			case 4:
+			{
+				lcd.print(" n.C.");
+				break;
+			}
+			default:
+			{
+				lcd.print("error ");
+			}
+		}
+        lcd.setCursor(0,1);
+		lcd.print(ssid);
         break;
       }
       default:

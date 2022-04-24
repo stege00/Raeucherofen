@@ -21,7 +21,7 @@ typedef struct sensorData
 {
   int humidity=0;
   int temperature=0;
-  bool flame_detection=false;
+  int flame_detection=0;
   bool open_door=false;
   char date_formatted[11];
   char time_formatted[9];
@@ -32,7 +32,7 @@ FUNCTION DECLARATIONS
 ************************************************************************************************************************************/
 // menu
 int check_buttons(struct pt* pt);
-void update_lcd();
+int update_lcd(struct pt* pt);
 // wifi_communication
 void wifiStartup();
 void wifiConnect();
@@ -82,6 +82,7 @@ const bool LED_status = HIGH;
 
 // necessary protothreads (used in loop)
   pt ptButtons;
+  pt ptLCD;
   pt ptWiFiCommunication;
   pt ptData;
   pt ptSensorTempHum;
@@ -92,9 +93,11 @@ const bool LED_status = HIGH;
   unsigned long previousMillisSensors = 0;          // will store last time sensor information was updated
   unsigned long previousMillisWifi = 0;             // will store last time Wi-Fi information was updated
   unsigned long previousMillisServer = 0;           //   "    "     "    "  Server      "      "     "
+  unsigned long previousMillisLCD = 0;          	//   "    "     "    "  LCD         "      "     "
   const int intervalSensors = 5000;                 // interval at which to update the sensor information
   const int intervalWifiInfo = 10000;               // interval at which to update the Wi-Fi information
   const int intervalServerInfo = 10000;             //   "       "   "    "   "     "  Server     "
+  const int intervalLCD = 40;             			//   "       "   "    "   "     "  LCD     	  "
 
 /****************************************************** WIFI COMMUNICATION ********************************************************/
 
@@ -144,18 +147,19 @@ void setup() {
 
   // init necessary protothreads
   PT_INIT(&ptButtons);
+  PT_INIT(&ptLCD);
   PT_INIT(&ptWiFiCommunication);
   PT_INIT(&ptData);
   PT_INIT(&ptSensorTempHum);
   PT_INIT(&ptSensorFire);
   PT_INIT(&ptSensorHall);
-
+/************************************************ comment for serial control traffic *************************************************/
   // serial startup
   Serial.begin(9600);
   while(!Serial){
     ;
   }
-
+/*************************************************************************************************************************************/
   // LCD
 	lcd.begin(16,2);    //set 16 columns and 2 rows of 16x2 LCD
   
@@ -194,12 +198,12 @@ void loop() {
   The loop function is continually called.
   It is used to check the peripherals in given intervals and connected networks for changes/errors.
   */
-  update_lcd();
+  PT_SCHEDULE(update_lcd(&ptLCD));
   PT_SCHEDULE(check_buttons(&ptButtons));
   
   PT_SCHEDULE(get_latest_data(&ptData));
   PT_SCHEDULE(get_sensor_temperature_humidity(&ptSensorTempHum));
-  PT_SCHEDULE(get_sensor_fire(&ptSensorFire, 0));
+  PT_SCHEDULE(get_sensor_fire(&ptSensorFire, 1));
   PT_SCHEDULE(get_sensor_hall(&ptSensorHall));
 
 
@@ -293,136 +297,148 @@ int check_buttons(struct pt* pt) {
   PT_END(pt);
 }
 
-void update_lcd() {
+int update_lcd(struct pt* pt) {
+  PT_BEGIN(pt);
+  
+  for(;;) {
+    if (millis() - previousMillisLCD > intervalLCD) {
+      previousMillisLCD = millis();
 
-  lcd.clear();	  
-  last_state=state_screen;
-  state_screen=next_state;
-  //state_machine
-  
-  //LED out for firedetektion not final version
-	if(data_latest.flame_detection)
-	  {
-		digitalWrite(LED_red, HIGH);
+      lcd.clear();	  
+      last_state=state_screen;
+      state_screen=next_state;
+      //state_machine
+      
+      //LED out for firedetektion not final version
+      if(data_latest.flame_detection>450)
+        {
+        digitalWrite(LED_red, HIGH);
+        }
+      else
+        {
+        digitalWrite(LED_red, LOW);
+        }
+      
+      
+      switch (state_screen)
+      {
+        case 0:							  			//headpage
+        {
+          lcd.print("Studienarbeit");
+          lcd.setCursor(0,1);
+          lcd.print("TEL19GR3    2022");
+          break;
+        }
+        case 1:										//data temp
+        {
+          lcd.print("Temp: ");
+          lcd.print((float)data_latest.temperature);
+          lcd.print(" \xdf");							// ° Symbol
+          lcd.print("C");
+          break;
+        }
+        case 2:										//data humi
+        {
+          lcd.print("Feucht: ");
+          lcd.print((float)data_latest.humidity);
+          lcd.print(" %");
+          break;
+        }
+        case 3:										//data fire
+        {
+          lcd.print("Feuer: ");
+          if(data_latest.flame_detection)
+          {
+            lcd.print("Ja");
+          }
+          else
+          {
+            lcd.print("Nein");
+          }
+          lcd.setCursor(0,1);
+          lcd.print((float)data_latest.flame_detection);
+          break;
+        }
+        case 4:										//data hall
+        {
+          lcd.print("Tuer ");
+          if(data_latest.open_door)
+          {
+            lcd.print("auf");
+          }
+          else
+          {
+            lcd.print("zu");
+          }
+          break;
+        }
+        case 5:										//show all
+        {
+          lcd.print("Te: ");
+          lcd.print((float)data_latest.temperature, 0);
+          lcd.print("\xdf");				// ° Symbol
+          lcd.print("C ");
+          lcd.print("Hu: ");
+              lcd.print((float)data_latest.humidity, 0);
+          lcd.print("%");
+          lcd.setCursor(0,1);
+          lcd.print("Tu: ");
+          if(data_latest.open_door)
+          {
+            lcd.print("auf ");  
+          }
+          else
+          {
+            lcd.print("zu   ");
+          }
+          lcd.print(" Fi: ");
+          /*if(data_latest.flame_detection)
+          {
+            lcd.print("Yes");
+          }
+          else
+          {
+            lcd.print("No");
+          }*/
+          lcd.print((float)data_latest.flame_detection);
+          break;
+        }
+        case 6:										//Network
+        {
+          lcd.print("Netz:");
+          switch(wifi_status)
+          {
+            case 3:
+            {
+              lcd.print(" OK");
+              break;
+            }
+            case 4:
+            {
+              lcd.print(" n.C.");
+              break;
+            }
+            default:
+            {
+              lcd.print("error ");
+            }
+          }
+          lcd.setCursor(0,1);
+          lcd.print(ssid);
+          break;
+        }
+        default:
+        {
+          lcd.print("error ");
+        }
+      }
+    } 
+    else 
+    {
+		  PT_YIELD(pt);
 	  }
-	else
-	  {
-		digitalWrite(LED_red, LOW);
-	  }
-  
-  
-  switch (state_screen)
-  {
-      case 0:							  			//headpage
-      {
-        lcd.print("Studienarbeit");
-		lcd.setCursor(0,1);
-		lcd.print("TEL19GR3    2022");
-        break;
-      }
-      case 1:										//data temp
-      {
-        lcd.print("Temp: ");
-        lcd.print((float)data_latest.temperature, 0);
-		lcd.print(" \xdf");							// ° Symbol
-		lcd.print("C");
-        break;
-      }
-      case 2:										//data humi
-      {
-		lcd.print("Feucht: ");
-        lcd.print((float)data_latest.humidity, 0);
-		lcd.print(" %");
-        break;
-      }
-      case 3:										//data fire
-      {
-        lcd.print("Feuer: ");
-        if(data_latest.flame_detection)
-			  {
-				  lcd.print("Ja");
-			  }
-		    else
-			  {
-				  lcd.print("Nein");
-			  }
-		    // lcd.setCursor(0,1);
-		    // lcd.print(get_sensor_fire(1));
-        break;
-      }
-      case 4:										//data hall
-      {
-        lcd.print("Tuer ");
-        if(data_latest.open_door)
-			  {
-				  lcd.print("auf");
-			  }
-		    else
-			  {
-				  lcd.print("zu");
-			  }
-        break;
-      }
-      case 5:										//show all
-      {
-        lcd.print("Te: ");
-		lcd.print((float)data_latest.temperature, 0);
-		lcd.print("\xdf");				// ° Symbol
-		lcd.print("C ");
-		lcd.print("Hu: ");
-        lcd.print((float)data_latest.humidity, 0);
-		lcd.print("%");
-		lcd.setCursor(0,1);
-		lcd.print("Tu: ");
-		if(data_latest.open_door)
-			  {
-				  lcd.print("auf ");
-			  }
-		    else
-			  {
-				  lcd.print("zu   ");
-			  }
-		lcd.print(" Fi: ");
-        if(data_latest.flame_detection)
-			  {
-				  lcd.print("Yes");
-			  }
-		    else
-			  {
-				  lcd.print("No");
-			  }
-        break;
-      }
-	  case 6:										//Network
-      {
-        lcd.print("Netz:");
-		switch(wifi_status)
-		{
-			case 3:
-			{
-				lcd.print(" OK");
-				break;
-			}
-			case 4:
-			{
-				lcd.print(" n.C.");
-				break;
-			}
-			default:
-			{
-				lcd.print("error ");
-			}
-		}
-        lcd.setCursor(0,1);
-		lcd.print(ssid);
-        break;
-      }
-      default:
-      {
-        lcd.print("error ");
-      }
   }
-  delay(45);	                                    //replace with protothreads
+  PT_END(pt);
 }
 
 /***********************************************************************************************************************************
@@ -757,13 +773,14 @@ int get_sensor_fire(struct pt* pt, int para) {
     // get data once every sensor interval:
     if (status_ptSensorFire == 1) {
       cnt_flame = 0;
-
+		Serial.println(analogRead(pin_flame_analog));
       for (flame_detct_cnt = 0; flame_detct_cnt < 10; flame_detct_cnt++)
       {
 
         if (para && (analogRead(pin_flame_analog) > analog_flame_threshold)) 
         {
           cnt_flame ++;
+		  
         }
         else if (!para && (digitalRead(pin_flame_digital)))
         {
@@ -771,7 +788,7 @@ int get_sensor_fire(struct pt* pt, int para) {
         }
         PT_SLEEP(pt, 5);
       }
-
+/*
       if (cnt_flame > 6) 
       {
         data_latest.flame_detection = true;
@@ -779,10 +796,11 @@ int get_sensor_fire(struct pt* pt, int para) {
       else
       {
         data_latest.flame_detection = false;
-      }
+      }*/
+	  data_latest.flame_detection=analogRead(pin_flame_analog);
       status_ptSensorFire = 0;
       Serial.println("Fire-Sensor finished");
-
+	
     }
     else
     {

@@ -34,6 +34,7 @@ FUNCTION DECLARATIONS
 int check_buttons(struct pt* pt);
 int update_lcd(struct pt* pt);
 // wifi_communication
+void check_webServer();
 void wifiStartup();
 void wifiConnect();
 void wifiConnect();
@@ -261,7 +262,7 @@ int check_buttons(struct pt* pt) {
           server.begin();
           offlineMode = false;
         }        
-        elif(state_screen!=state_max)
+        else if(state_screen!=state_max)
         {
           Serial.println("Button Confirm");
         }
@@ -327,7 +328,7 @@ int update_lcd(struct pt* pt) {
         case 3:										//data fire
         {
           lcd.print("Feuer: ");
-          if(data_latest.flame_detection)
+          if(digitalRead(pin_flame_digital))
           {
             lcd.print("Ja");
           }
@@ -388,9 +389,14 @@ int update_lcd(struct pt* pt) {
           lcd.print("Netz:");
           switch(wifi_status)
           {
+			case 0:
+			{
+			  lcd.print(" offline");
+              break; 
+			}
             case 3:
             {
-              lcd.print(" OK");
+              lcd.print(" connected");
               break;
             }
             case 4:
@@ -425,7 +431,7 @@ int update_lcd(struct pt* pt) {
 WIFI COMMUNICATION
 ************************************************************************************************************************************/
 
-void check_webServer {
+void check_webServer() {
   // check for new clients
   client = server.available();
   if (client)
@@ -781,7 +787,7 @@ int get_sensor_fire(struct pt* pt, int para) {
 
 
   for(;;) {  
-
+	Serial.println(digitalRead(pin_flame_digital));
     // get data once every sensor interval:
     if (status_ptSensorFire == 1) {
       cnt_flame = 0;

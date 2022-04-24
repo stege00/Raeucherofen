@@ -101,6 +101,7 @@ const bool LED_status = HIGH;
 
 /****************************************************** WIFI COMMUNICATION ********************************************************/
 
+bool offlineMode = true;
 WiFiServer server(80);                            // set WiFi Server at port 80
 WiFiClient client;
 
@@ -178,15 +179,6 @@ void setup() {
   //I2C --> temp/humidity sensor
 	Wire.begin();
 
-  // WiFi
-  wifiStartup();
-  wifiConnect();
-  
-  printCurrentNet();
-  printWifiData();
-  //Serial.println(server.status());
-  server.begin();
-  //Serial.println(server.status());
 }
 
 /***********************************************************************************************************************************
@@ -206,35 +198,8 @@ void loop() {
   PT_SCHEDULE(get_sensor_fire(&ptSensorFire, 1));
   PT_SCHEDULE(get_sensor_hall(&ptSensorHall));
 
-
-  // check for new clients at the webserver every loop iteration
-  client = server.available();
-  if (client)
-    httpCommunication(client);
-
-  // check the network connection once every WiFi interval:
-  if (millis() - previousMillisWifi > intervalWifiInfo) {
-    wifi_status = WiFi.status();
-    
-    if (wifi_status != WL_CONNECTED) {
-      Serial.print("WiFi disconnected:\nwifistatus: ");
-      Serial.println(wifi_status);
-      wifiConnect();
-      printCurrentNet();
-    }
-    previousMillisWifi = millis();
-  }
-
-  // check the webserver status once every Server-Info interval:    
-  if (millis() - previousMillisServer > intervalServerInfo) {
-
-    if (server.status() != 1) {
-      Serial.print("Server Status: ");
-      Serial.println(server.status());
-      Serial.println("Restarting Server");
-      server.begin();
-    }
-    previousMillisServer = millis();
+  if (not offlineMode) {
+    check_webServer();
   }
 
 }
@@ -281,7 +246,22 @@ int check_buttons(struct pt* pt) {
       PT_SLEEP(pt, 5);
       if(digitalRead(button_CONFIRM))
       {
-        if(state_screen!=state_max)
+        if (state_screen==6)    //Network
+        {
+          lcd.clear();
+          lcd.print("Netz");
+          lcd.setCursor(0,1);
+          lcd.print("Connecting");
+
+          wifiStartup();
+          wifiConnect();
+          
+          printCurrentNet();        // debugging only
+          printWifiData();          // debugging only
+          server.begin();
+          offlineMode = false;
+        }        
+        elif(state_screen!=state_max)
         {
           Serial.println("Button Confirm");
         }
@@ -444,6 +424,38 @@ int update_lcd(struct pt* pt) {
 /***********************************************************************************************************************************
 WIFI COMMUNICATION
 ************************************************************************************************************************************/
+
+void check_webServer {
+  // check for new clients
+  client = server.available();
+  if (client)
+    httpCommunication(client);
+
+  // check the network connection once every WiFi interval:
+  if (millis() - previousMillisWifi > intervalWifiInfo) {
+    wifi_status = WiFi.status();
+    
+    if (wifi_status != WL_CONNECTED) {
+      Serial.print("WiFi disconnected:\nwifistatus: ");
+      Serial.println(wifi_status);
+      wifiConnect();
+      printCurrentNet();
+    }
+    previousMillisWifi = millis();
+  }
+
+  // check the webserver status once every Server-Info interval:    
+  if (millis() - previousMillisServer > intervalServerInfo) {
+
+    if (server.status() != 1) {
+      Serial.print("Server Status: ");
+      Serial.println(server.status());
+      Serial.println("Restarting Server");
+      server.begin();
+    }
+    previousMillisServer = millis();
+  }
+}
 
 void wifiStartup() {
    // check for the WiFi module:

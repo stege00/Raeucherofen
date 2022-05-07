@@ -155,13 +155,13 @@ void setup() {
   PT_INIT(&ptSensorTempHum);
   PT_INIT(&ptSensorFire);
   PT_INIT(&ptSensorHall);
-/************************************************ comment for serial control traffic *************************************************/
+/************************************************ comment for serial control traffic *************************************************
   // serial startup
   Serial.begin(9600);
   while(!Serial){
     ;
   }
-/*************************************************************************************************************************************/
+*************************************************************************************************************************************/
   // LCD
 	lcd.begin(16,2);    //set 16 columns and 2 rows of 16x2 LCD
   
@@ -227,6 +227,10 @@ int check_buttons(struct pt* pt) {
         {
           next_state-=1;
         }
+        else
+        {
+          next_state=state_max;
+        }
         PT_YIELD_UNTIL(pt, !digitalRead(button_DOWN));
       }
     }
@@ -238,6 +242,10 @@ int check_buttons(struct pt* pt) {
         if(state_screen!=state_max)
         {
           next_state+=1;
+        }
+        else
+        {
+          next_state=state_min;
         }
         PT_YIELD_UNTIL(pt, !digitalRead(button_UP));
       }

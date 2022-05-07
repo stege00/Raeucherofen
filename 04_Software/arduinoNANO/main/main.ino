@@ -68,7 +68,7 @@ const uint8_t button_DOWN = 20;
 // fire detection
 const uint8_t pin_flame_analog = 3;                       
 const uint8_t pin_flame_digital = 2;
-
+bool state_alarm = true;
 // door detection
 const uint8_t pin_hall_analog = 10;    
 
@@ -275,6 +275,10 @@ int check_buttons(struct pt* pt) {
           Serial.println("Button Confirm");
         }
         PT_YIELD_UNTIL(pt, !digitalRead(button_UP));
+        if(state_screen==100)
+        {
+          state_alarm=false;
+        }
       }
     }									
     else
@@ -397,11 +401,11 @@ int update_lcd(struct pt* pt) {
           lcd.print("Netz:");
           switch(wifi_status)
           {
-			case 0:
-			{
-			  lcd.print(" offline");
-              break; 
-			}
+            case 0:
+            {
+              lcd.print(" offline");
+                    break; 
+            }
             case 3:
             {
               lcd.print(" connected");
@@ -421,10 +425,28 @@ int update_lcd(struct pt* pt) {
           lcd.print(ssid);
           break;
         }
+        case 100:
+        {
+          while (state_alarm)                         //replace with pt
+          {
+          lcd.clear();
+          delay(100);
+          lcd.print("OOOOOOOOOOOOOOOO");
+          lcd.setCursor(0,1);
+          lcd.print("OOOOOOOOOOOOOOOO");
+          delay(100);
+          }
+          next_state=state_min;
+          break;
+        }
         default:
         {
           lcd.print("error ");
         }
+      }
+      if(digitalRead(pin_flame_digital))                //check if fire and start the fire screen case 100
+      {
+        //next_state=100;
       }
     } 
     else 

@@ -57,20 +57,20 @@ GLOBAL VARIABLES
 /*********************************************************** PERIPHERALS ***********************************************************/
 
 // LCD
-const int RS = 8, EN = 9, D4 = 4, D5 = 5, D6 = 6, D7 = 7;
+const int RS = 9, EN = 8, D4 = 7, D5 = 6, D6 = 5, D7 = 4;
 LiquidCrystal lcd(RS,EN,D4,D5,D6,D7);
 
 // buttons
-const uint8_t button_CONFIRM = 15;						  
-const uint8_t button_UP = 21;
-const uint8_t button_DOWN = 20;
+const uint8_t button_CONFIRM = 17;						  
+const uint8_t button_UP = 16;
+const uint8_t button_DOWN = 15;
 
 // fire detection
 const uint8_t pin_flame_analog = 3;                       
 const uint8_t pin_flame_digital = 2;
-bool state_alarm = true;
+bool state_alarm = false;
 // door detection
-const uint8_t pin_hall_analog = 10;    
+const uint8_t pin_hall_analog = 13;    
 
 // humidity - temperature
 const int i2cAdress_HumTemp = 0x28;
@@ -125,7 +125,7 @@ int flame_detct_cnt = 0;                                // counts flame detectio
 int cnt_flame = 0;                                      // counts flame detections in given tries
 int hall_detct_cnt = 0;                                 // counts flame detection tries
 int cnt_hall = 0;
-const int analog_hall_threshold = 800;
+const int analog_hall_threshold = 0;
 
 // status of protothreads
 int status_ptSensorTempHum = 0;                         // 1 = protothread active
@@ -433,7 +433,7 @@ int update_lcd(struct pt* pt) {
           lcd.print("error ");
         }
       }
-      if(data_latest.flame_detection)                //check if fire and start the fire screen case 100
+      if(data_latest.flame_detection && !data_latest.open_door)                //check if fire and start the fire screen case 100
       {
         next_state=100;
       }
@@ -821,6 +821,7 @@ int get_sensor_fire(struct pt* pt) {
       if (cnt_flame > 6) 
       {
         data_latest.flame_detection = true;
+        
       }
       else
       {

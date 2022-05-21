@@ -47,7 +47,7 @@ String sendHTML();
 int get_latest_data(struct pt* pt);
 void getDateTime();
 int get_sensor_temperature_humidity(struct pt* pt);
-int get_sensor_fire(struct pt* pt, int para);
+int get_sensor_fire(struct pt* pt);
 int get_sensor_hall(struct pt* pt);
 
 /***********************************************************************************************************************************
@@ -94,11 +94,12 @@ const bool LED_status = HIGH;
   unsigned long previousMillisSensors = 0;          // will store last time sensor information was updated
   unsigned long previousMillisWifi = 0;             // will store last time Wi-Fi information was updated
   unsigned long previousMillisServer = 0;           //   "    "     "    "  Server      "      "     "
-  unsigned long previousMillisLCD = 0;          	//   "    "     "    "  LCD         "      "     "
+  unsigned long previousMillisLCD = 0;          	  //   "    "     "    "  LCD         "      "     "
+  
   const int intervalSensors = 5000;                 // interval at which to update the sensor information
   const int intervalWifiInfo = 10000;               // interval at which to update the Wi-Fi information
   const int intervalServerInfo = 10000;             //   "       "   "    "   "     "  Server     "
-  const int intervalLCD = 40;             			//   "       "   "    "   "     "  LCD     	  "
+  const int intervalLCD = 40;             			    //   "       "   "    "   "     "  LCD     	  "
 
 /****************************************************** WIFI COMMUNICATION ********************************************************/
 
@@ -122,8 +123,7 @@ boolean sensor_timeout;
 // Sensor variables
 int flame_detct_cnt = 0;                                // counts flame detection tries
 int cnt_flame = 0;                                      // counts flame detections in given tries
-const int analog_flame_threshold = 800;                 // 0... 1023
-int hall_detct_cnt = 0;                                // counts flame detection tries
+int hall_detct_cnt = 0;                                 // counts flame detection tries
 int cnt_hall = 0;
 const int analog_hall_threshold = 800;
 
@@ -196,7 +196,7 @@ void loop() {
   
   PT_SCHEDULE(get_latest_data(&ptData));
   PT_SCHEDULE(get_sensor_temperature_humidity(&ptSensorTempHum));
-  PT_SCHEDULE(get_sensor_fire(&ptSensorFire, 1));
+  PT_SCHEDULE(get_sensor_fire(&ptSensorFire));
   PT_SCHEDULE(get_sensor_hall(&ptSensorHall));
 
   if (not offlineMode) {
@@ -300,18 +300,7 @@ int update_lcd(struct pt* pt) {
       lcd.clear();	  
       last_state=state_screen;
       state_screen=next_state;
-      //state_machine
-      
-      //LED out for firedetektion not final version
-      if(data_latest.flame_detection>450)
-        {
-        digitalWrite(LED_red, HIGH);
-        }
-      else
-        {
-        digitalWrite(LED_red, LOW);
-        }
-      
+      //state_machine      
       
       switch (state_screen)
       {
@@ -427,14 +416,14 @@ int update_lcd(struct pt* pt) {
         }
         case 100:
         {
-          while (state_alarm)                         //replace with pt
+          while (state_alarm)
           {
           lcd.clear();
-          delay(100);
+          PT_SLEEP(pt, 100);
           lcd.print("OOOOOOOOOOOOOOOO");
           lcd.setCursor(0,1);
           lcd.print("OOOOOOOOOOOOOOOO");
-          delay(100);
+          PT_SLEEP(pt, 100);
           }
           next_state=state_min;
           break;
@@ -444,9 +433,9 @@ int update_lcd(struct pt* pt) {
           lcd.print("error ");
         }
       }
-      if(digitalRead(pin_flame_digital))                //check if fire and start the fire screen case 100
+      if(data_latest.flame_detection)                //check if fire and start the fire screen case 100
       {
-        //next_state=100;
+        next_state=100;
       }
     } 
     else 
@@ -807,7 +796,7 @@ int get_sensor_temperature_humidity(struct pt* pt) {
   PT_END(pt);
 }
 
-int get_sensor_fire(struct pt* pt, int para) {
+int get_sensor_fire(struct pt* pt) {
   /*
   Function to get sensor data from the fire detection sensor module.
   Reads repeatedly sensor data to circumvent bouncing of sensor, if more than 60% of the Sensorvalues show positive, give positive flamedetection back.
@@ -817,26 +806,18 @@ int get_sensor_fire(struct pt* pt, int para) {
 
 
   for(;;) {  
-	Serial.println(digitalRead(pin_flame_digital));
     // get data once every sensor interval:
     if (status_ptSensorFire == 1) {
       cnt_flame = 0;
-		Serial.println(analogRead(pin_flame_analog));
       for (flame_detct_cnt = 0; flame_detct_cnt < 10; flame_detct_cnt++)
       {
-
-        if (para && (analogRead(pin_flame_analog) > analog_flame_threshold)) 
-        {
-          cnt_flame ++;
-		  
-        }
-        else if (!para && (digitalRead(pin_flame_digital)))
+        if (digitalRead(pin_flame_digital))
         {
           cnt_flame ++;
         }
         PT_SLEEP(pt, 5);
       }
-/*
+
       if (cnt_flame > 6) 
       {
         data_latest.flame_detection = true;
@@ -844,8 +825,8 @@ int get_sensor_fire(struct pt* pt, int para) {
       else
       {
         data_latest.flame_detection = false;
-      }*/
-	  data_latest.flame_detection=analogRead(pin_flame_analog);
+      }
+
       status_ptSensorFire = 0;
       Serial.println("Fire-Sensor finished");
 	

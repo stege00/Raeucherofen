@@ -12,9 +12,12 @@ partition Downloader {
         Input Stream from Host
         (HTML Sourcecode)
     end note
-    :Download-Complete-Listener;
-    ->Result from asynchronous Task;
+    :on post execute call 
+    Download-Complete-Listener;
+    detach
 }
+:Download-Complete-Listener activated;
+->Result from asynchronous Task;
 :Main Activity|
 
 @enduml
